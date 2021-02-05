@@ -1,0 +1,174 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Twitch Channels</title>
+</head>
+<body>
+    <div data-role="page" class="page type-interior pluginConfigurationPage twitchConfigurationPage" data-require="emby-button,emby-select,emby-checkbox,emby-linkbutton">
+
+        <div data-role="content">
+            <div class="content-primary">
+                <div class="readOnlyContent">
+                    <div style="display: flex; align-items: center;margin: 1em 0;">
+                        <h1 style="margin:0;">Twitch Channels</h1>
+                        <button is="emby-button" type="button" class="raised btnAdd submit mini" style="margin-left:1em;" title="Add">
+                            <i class="md-icon">add</i>
+                            <span>Add</span>
+                        </button>
+                    </div>
+                    <div class="streamList paperList">
+                    </div>
+                </div>
+            </div>
+            <div data-role="popup" id="streamPopup" class="dialog dialog-fixedSize dialog-medium-tall hide" style="position: fixed; top: 10%;">
+                <form id="streamForm" style="padding:1em;">
+                    <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
+                        <h3>New Twitch Channel</h3>
+                    </div>
+                    <div data-role="content">
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="Name" label="Name:" />
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="UserName" label="Twitch username:" />
+                        </div>
+                        <div class="selectContainer">
+                            <select id="Quality" name="Quality" is="emby-select" label="Quality:">
+                                <option value="Best">Best</option>
+                                <option value="Worst">Worst</option>
+                            </select>
+                        </div>
+                        <p>
+                            <button is="emby-button" type="submit" class="raised button-submit block" data-icon="check" data-mini="true">
+                                <span>Add</span>
+                            </button>
+                            <button is="emby-button" type="button" class="raised button-cancel block" data-icon="delete" onclick="$('#streamPopup').addClass('hide');" data-mini="true">
+                                <span>${ButtonCancel}</span>
+                            </button>
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+                var TwitchConfigurationPage = {
+
+                    pluginUniqueId: "40C12641-317D-48FC-ABFD-9F608FA0386A",
+
+                    populateStreamList: function (page) {
+                        var streams = TwitchConfigurationPage.config.TwitchChannels;
+                        var html = "";
+
+                        for (var i = 0; i < streams.length; i++) {
+                            var stream = streams[i];
+
+                            html += '<div class="listItem">';
+                            html += '<i class="listItemIcon md-icon">live_tv</i>';
+                            html += '<div class="listItemBody two-line">';
+                            html += '<h3 class="listItemBodyText">';
+                            html += stream.Name;
+                            html += '</h3>';
+                            html += '</div>';
+                            html += '<button type="button" is="paper-icon-button-light" onclick="TwitchConfigurationPage.deleteStream(this, ' + i + ');"title="Delete"><i class="md-icon">delete</i></button>';
+                            html += '</div>';
+                        }
+
+                        var streamList = page.querySelector('.streamList');
+                        streamList.innerHTML = html;
+
+                        if (streams.length) {
+                            streamList.classList.remove('hide');
+                        } else {
+                            streamList.classList.add('hide');
+                        }
+                    },
+                    deleteStream: function (button, index) {
+                        var msg = "Are you sure you wish to delete this channel?";
+
+                        require(['confirm'], function (confirm) {
+                            confirm(msg, "Delete Channel").then(function () {
+                                TwitchConfigurationPage.config.TwitchChannels.splice(index, 1);
+                                var page = $(button).parents('.page')[0];
+
+                                TwitchConfigurationPage.save();
+                                TwitchConfigurationPage.populateStreamList(page);
+                            });
+                        });
+                    },
+                    addStreamPopup: function (page) {
+                        $('#Name', page).val("").focus();
+                        $('#UserName', page).val("");
+                        $('#Quality', page).val("Best");
+                        $('#streamPopup', page).removeClass('hide');
+                        $('#Name', page).focus();
+                    },
+                    save: function () {
+                        Dashboard.showLoadingMsg();
+
+                        ApiClient.getPluginConfiguration(TwitchConfigurationPage.pluginUniqueId).then(function (config) {
+                            config.TwitchChannels = TwitchConfigurationPage.config.TwitchChannels;
+                            ApiClient.updatePluginConfiguration(TwitchConfigurationPage.pluginUniqueId, config).then(Dashboard.processPluginConfigurationUpdateResult);
+                        });
+                    }
+                };
+
+                $('.twitchConfigurationPage').on('pageinit', function (event) {
+                    var page = this;
+
+                    page.querySelector('.btnAdd').addEventListener('click', function () {
+                        TwitchConfigurationPage.addStreamPopup(page);
+                    });
+
+                    $('#streamForm', page).on('submit', function (e) {
+                        $('#streamPopup', page).addClass('hide');
+                        var form = this;
+
+                        var newEntry = true;
+                        var name = $('#Name', page).val(); 
+                        var userName = $('#UserName', page).val();
+                        var quality = $('#Quality', page).val();
+                        var userId = Dashboard.getCurrentUserId();
+
+                        if (TwitchConfigurationPage.config.TwitchChannels.length > 0) {
+                            for (var i = 0, length = TwitchConfigurationPage.config.TwitchChannels.length; i < length; i++) {
+                                if (TwitchConfigurationPage.config.TwitchChannels[i].Name == name) {
+                                    newEntry = false;
+                                    TwitchConfigurationPage.config.TwitchChannels[i].UserName = userName; 
+                                    TwitchConfigurationPage.config.TwitchChannels[i].Quality = quality;
+                                    TwitchConfigurationPage.config.TwitchChannels[i].UserId = userId;
+                                }
+                            }
+                        }
+
+                        if (newEntry) {
+                            var conf = {};
+
+                            conf.Name = name;
+                            conf.UserName = userName; 
+                            conf.Quality = quality;
+                            conf.UserId = userId;
+                            TwitchConfigurationPage.config.TwitchChannels.push(conf);
+                        }
+
+                        TwitchConfigurationPage.save();
+                        TwitchConfigurationPage.populateStreamList(page);
+                        return false;
+                    });
+                });
+
+                $('.twitchConfigurationPage').on('pageshow', function (event) {
+                    Dashboard.showLoadingMsg();
+                    var page = this;
+
+                    ApiClient.getPluginConfiguration(TwitchConfigurationPage.pluginUniqueId).then(function (config) {
+                        console.log(config);
+                        TwitchConfigurationPage.config = config;
+                        TwitchConfigurationPage.populateStreamList(page);
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+        </script>
+    </div>
+</body>
+</html>
