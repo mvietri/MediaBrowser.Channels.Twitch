@@ -13,5 +13,6 @@ namespace MediaBrowser.Channels.Twitch
         public string Path { get; set; }
         public string Image { get; set; }
         public MediaProtocol Protocol { get; set; }
+        public string ChannelId { get; set; }
     }
 }

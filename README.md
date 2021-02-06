@@ -10,14 +10,17 @@ It a _basic_ plugin so I can watch streams on the TV without extra hardware or s
 ---
 ## Getting started
 
+**NOTES**: 
 
-- This plugin needs [streamlink](https://github.com/streamlink/streamlink) to get the vod url for the live stream. The streamlink should be installed and on the path. Since Twitch API is not documented, streamlink may stop without notice and so this plugin. Keep streamlink updated.
+> When adding a new channel, metadata (pictures & description) is being downloaded by the plugin, it may take a moment to be displayed on dashboard.
 
-![Dashboard](img/twitch_add.png)
+> This plugin needs [streamlink](https://github.com/streamlink/streamlink) to get the vod url for the live stream. **The streamlink should be installed and added to system path.** 
+
+>Since Twitch API is not documented, streamlink may stop without notice and so this plugin. Keep streamlink updated.
 
 - Compile using Visual Studio and copy the DLL to Emby plugins directory. Restart the server and go to Plugins -> Twitch. Add your channels, then you can access them from the dashboard.
 
-- A new VoD URL is request when pressing Play on the Video. Sometimes there is a caché and Emby won't process the callback.
+- A new VoD URL is requested when opening the channel. Sometimes there is a caché and Emby won't process the callback. Wait a few minutes and try again.
 
 
 ---

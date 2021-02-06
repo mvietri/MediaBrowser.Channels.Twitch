@@ -12,14 +12,20 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Logging;
 using System.Diagnostics;
 using MediaBrowser.Model.MediaInfo;
+using MediaBrowser.Common.Net;
+using MediaBrowser.Model.Serialization;
 
 namespace MediaBrowser.Channels.Twitch
 {
     public class Channel : IChannel, IHasCacheKey, IHasChangeEvent
-    {
+    { 
+        private readonly IHttpClient _httpClient;
         private readonly ILogger _logger;
+        private readonly IJsonSerializer _jsonSerializer;
 
         public event EventHandler ContentChanged;
+
+        private const string TWITCH_CLIENT_ID = "jexf81lm1alf3o79290nyzbulhc4dy";
 
         public void OnContentChanged()
         {
@@ -29,9 +35,11 @@ namespace MediaBrowser.Channels.Twitch
             }
         }
 
-        public Channel(ILogManager logManager)
+        public Channel(IHttpClient httpClient, ILogManager logManager, IJsonSerializer jsonSerializer)
         {
+            _httpClient = httpClient;
             _logger = logManager.GetLogger(GetType().Name);
+            _jsonSerializer = jsonSerializer;
         }
 
         // Increment as needed to invalidate all caches
@@ -48,17 +56,50 @@ namespace MediaBrowser.Channels.Twitch
 
             foreach (TwitchChannel i in Plugin.Instance.Configuration.TwitchChannels)
             {
+                // get user id
+                UserMetadata userMetadata = null;
+                ChannelMetadata channelMetadata = null;
+
+                if (String.IsNullOrWhiteSpace(i.ChannelId))
+                {
+                    userMetadata = await GetMetadataFromTwitchUserAsync(i.UserName);
+
+                    if (userMetadata != null && userMetadata.Users.Length > 0)
+                        i.ChannelId = userMetadata.Users[0]._id.ToString();
+                    else
+                        i.ChannelId = string.Empty;
+
+                    Plugin.Instance.SaveConfiguration(); // keep user id in db
+                }
+
+                if (String.IsNullOrWhiteSpace(i.ChannelId) == false)
+                    channelMetadata = await GetMetadataFromTwitchChannelAsync(i.ChannelId);
+
+                string imageUrl = String.Empty;
+                string overview = $"No description";
+                
+                if (channelMetadata != null)
+                {
+                    overview = channelMetadata.description;
+
+                    if (string.IsNullOrWhiteSpace(channelMetadata.profile_banner) == false)
+                        imageUrl = channelMetadata.profile_banner;
+
+                    if (string.IsNullOrWhiteSpace(imageUrl) && string.IsNullOrWhiteSpace(channelMetadata.video_banner) == false) // Profile banner has priority
+                        imageUrl = channelMetadata.video_banner;
+                }
+
                 items.Add(new ChannelItemInfo
                 {
                     ContentType = ChannelMediaContentType.Clip,
-                    ImageUrl = "",
+                    ImageUrl = imageUrl,
                     IsLiveStream = true,
                     MediaType = ChannelMediaType.Video,
                     MediaSources = (List<MediaSourceInfo>)await GetMediaSources(i.UserName, cancellationToken),
                     Name = i.Name.ToLowerInvariant(),
                     Id = i.UserName.ToLowerInvariant(),
                     ExtraType = ExtraType.Clip,
-                    Overview = $"{i.UserName}'s Twitch Channel",
+                    Overview = overview,
                     Type = ChannelItemType.Media,
                 });
             }
@@ -71,6 +112,46 @@ namespace MediaBrowser.Channels.Twitch
             return await Task.FromResult(channelItemResult);
         }
 
+        private async Task<ChannelMetadata> GetMetadataFromTwitchChannelAsync(string id)
+        {
+            try
+            {
+                HttpRequestOptions requestOptions = new HttpRequestOptions();
+                requestOptions.Url = $"https://api.twitch.tv/kraken/channels/{id}";
+                requestOptions.AcceptHeader = "application/vnd.twitchtv.v5+json";
+                requestOptions.RequestHeaders.Add("Client-ID", TWITCH_CLIENT_ID);
+
+                using (var data = await _httpClient.Get(requestOptions).ConfigureAwait(false))
+                {
+                    return _jsonSerializer.DeserializeFromStream<ChannelMetadata>(data);
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task<UserMetadata> GetMetadataFromTwitchUserAsync(string userName)
+        { 
+            try
+            {
+                HttpRequestOptions requestOptions = new HttpRequestOptions();
+                requestOptions.Url = $"https://api.twitch.tv/kraken/users?login={userName.ToLowerInvariant()}";
+                requestOptions.AcceptHeader = "application/vnd.twitchtv.v5+json";
+                requestOptions.RequestHeaders.Add("Client-ID", TWITCH_CLIENT_ID);
+
+                using (var data = await _httpClient.Get(requestOptions).ConfigureAwait(false))
+                {
+                    return _jsonSerializer.DeserializeFromStream<UserMetadata>(data);
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        
         private void GetVodFromTwitch(ref TwitchChannel channel)
         {
             channel.Path = "";
