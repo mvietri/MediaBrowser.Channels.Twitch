@@ -14,24 +14,40 @@ using System.Diagnostics;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Model.Serialization;
+using System.Globalization;
 
 namespace MediaBrowser.Channels.Twitch
 {
-    public class Channel : IChannel, IHasCacheKey, IHasChangeEvent
+    public class Channel : IChannel, ISupportsLatestMedia, IHasCacheKey, IHasChangeEvent
     { 
         private readonly IHttpClient _httpClient;
         private readonly ILogger _logger;
         private readonly IJsonSerializer _jsonSerializer;
 
         public event EventHandler ContentChanged;
+        private Timer _updateTimer;
 
         private const string TWITCH_CLIENT_ID = "jexf81lm1alf3o79290nyzbulhc4dy";
 
         public void OnContentChanged()
         {
-            if (this.ContentChanged != null)
+            if (ContentChanged != null)
             {
-                this.ContentChanged(this, EventArgs.Empty);
+                ContentChanged(this, EventArgs.Empty);
+            }
+        }
+
+        private void OnUpdateTimerCallback(object state)
+        {
+            OnContentChanged();
+        } 
+
+        public void Dispose()
+        {
+            if (_updateTimer != null)
+            {
+                _updateTimer.Dispose();
+                _updateTimer = null;
             }
         }
 
@@ -39,11 +55,14 @@ namespace MediaBrowser.Channels.Twitch
         {
             _httpClient = httpClient;
             _logger = logManager.GetLogger(GetType().Name);
-            _jsonSerializer = jsonSerializer;
+            _jsonSerializer = jsonSerializer; 
+            
+            var interval = TimeSpan.FromMinutes(5);
+            _updateTimer = new Timer(OnUpdateTimerCallback, null, interval, interval);
         }
 
         // Increment as needed to invalidate all caches
-        public string DataVersion => "3";
+        public string DataVersion => "10";
 
         public async Task<ChannelItemResult> GetChannelItems(InternalChannelItemQuery query, CancellationToken cancellationToken)
         {
@@ -51,7 +70,7 @@ namespace MediaBrowser.Channels.Twitch
         }
           
         private async Task<ChannelItemResult> GetChannelItemsInternal(InternalChannelItemQuery query, CancellationToken cancellationToken)
-        {
+        { 
             List<ChannelItemInfo> items = new List<ChannelItemInfo>();
 
             foreach (TwitchChannel i in Plugin.Instance.Configuration.TwitchChannels)
@@ -174,7 +193,7 @@ namespace MediaBrowser.Channels.Twitch
 
             while (!process.StandardOutput.EndOfStream)
             {
-                channel.Path = channel.Path + process.StandardOutput.ReadLine();
+                channel.Path += process.StandardOutput.ReadLine();
             }
 
             channel.Path = channel.Path.Replace(System.Environment.NewLine, "").Trim();
@@ -216,7 +235,9 @@ namespace MediaBrowser.Channels.Twitch
 
                 SupportsContentDownloading = true, 
 
-                SupportsSortOrderToggle = false
+                SupportsSortOrderToggle = false,
+
+                AutoRefreshLevels = 3 
             };
         }
 
@@ -244,13 +265,27 @@ namespace MediaBrowser.Channels.Twitch
         public bool IsEnabledFor(string userId)
         {
             return true;
-        }
-         
+        } 
+
         public string GetCacheKey(string userId)
-            => Guid.NewGuid().ToString("N");
+        {
+            var now = DateTimeOffset.UtcNow;
+
+            var values = new List<string>();
+
+            values.Add(now.DayOfYear.ToString(CultureInfo.InvariantCulture));
+            values.Add(now.Hour.ToString(CultureInfo.InvariantCulture));
+
+            double minute = now.Minute;
+            minute /= 5;
+
+            values.Add(Math.Floor(minute).ToString(CultureInfo.InvariantCulture)); 
+
+            return string.Join("-", values.ToArray());
+        }
 
         Task<IEnumerable<MediaSourceInfo>> GetMediaSources(string id, CancellationToken cancellationToken)
-        { 
+        {
             TwitchChannel tChannel = null;
 
             foreach (TwitchChannel i in Plugin.Instance.Configuration.TwitchChannels)
