@@ -28,12 +28,16 @@ namespace MediaBrowser.Channels.Twitch
         private Timer _updateTimer;
 
         private const string TWITCH_CLIENT_ID = "jexf81lm1alf3o79290nyzbulhc4dy";
+        private const short REFRESH_MINUTES = 10;
 
         public void OnContentChanged()
         {
+            _logger.Debug("[TWITCH.TV] Content Changed fired");
+
             if (ContentChanged != null)
             {
                 ContentChanged(this, EventArgs.Empty);
+                _logger.Debug("[TWITCH.TV] Content Changed called");
             }
         }
 
@@ -57,12 +61,14 @@ namespace MediaBrowser.Channels.Twitch
             _logger = logManager.GetLogger(GetType().Name);
             _jsonSerializer = jsonSerializer; 
             
-            var interval = TimeSpan.FromMinutes(5);
+            var interval = TimeSpan.FromMinutes(REFRESH_MINUTES);
             _updateTimer = new Timer(OnUpdateTimerCallback, null, interval, interval);
+
+            _logger.Debug("[TWITCH.TV] Timer is up");
         }
 
         // Increment as needed to invalidate all caches
-        public string DataVersion => "10";
+        public string DataVersion => "15";
 
         public async Task<ChannelItemResult> GetChannelItems(InternalChannelItemQuery query, CancellationToken cancellationToken)
         {
@@ -96,7 +102,7 @@ namespace MediaBrowser.Channels.Twitch
 
                 string imageUrl = String.Empty;
                 string overview = $"No description";
-                
+
                 if (channelMetadata != null)
                 {
                     overview = channelMetadata.description;
@@ -106,7 +112,7 @@ namespace MediaBrowser.Channels.Twitch
 
                     if (string.IsNullOrWhiteSpace(imageUrl) && string.IsNullOrWhiteSpace(channelMetadata.video_banner) == false) // Profile banner has priority
                         imageUrl = channelMetadata.video_banner;
-                }
+                } 
 
                 items.Add(new ChannelItemInfo
                 {
@@ -118,16 +124,22 @@ namespace MediaBrowser.Channels.Twitch
                     Name = i.Name.ToLowerInvariant(),
                     Id = i.UserName.ToLowerInvariant(),
                     ExtraType = ExtraType.Clip,
+                    HomePageUrl = channelMetadata.url ?? $"https://twitch.tv/{i.UserName.ToLowerInvariant()}",
                     Overview = overview,
                     Type = ChannelItemType.Media,
+                    DateModified = DateTime.Now,
+                    DateCreated = DateTime.Now
                 });
+
+                _logger.Debug($"[TWITCH.TV] {i.UserName} channel added to list");
             }
 
             ChannelItemResult channelItemResult = new ChannelItemResult
             {
                 Items = items,
-                TotalRecordCount = items.Count,
+                TotalRecordCount = items.Count
             };
+
             return await Task.FromResult(channelItemResult);
         }
 
@@ -237,7 +249,7 @@ namespace MediaBrowser.Channels.Twitch
 
                 SupportsSortOrderToggle = false,
 
-                AutoRefreshLevels = 3 
+                AutoRefreshLevels = 1
             };
         }
 
@@ -269,19 +281,7 @@ namespace MediaBrowser.Channels.Twitch
 
         public string GetCacheKey(string userId)
         {
-            var now = DateTimeOffset.UtcNow;
-
-            var values = new List<string>();
-
-            values.Add(now.DayOfYear.ToString(CultureInfo.InvariantCulture));
-            values.Add(now.Hour.ToString(CultureInfo.InvariantCulture));
-
-            double minute = now.Minute;
-            minute /= 5;
-
-            values.Add(Math.Floor(minute).ToString(CultureInfo.InvariantCulture)); 
-
-            return string.Join("-", values.ToArray());
+            return Guid.NewGuid().ToString("N");
         }
 
         Task<IEnumerable<MediaSourceInfo>> GetMediaSources(string id, CancellationToken cancellationToken)
@@ -301,6 +301,11 @@ namespace MediaBrowser.Channels.Twitch
             {
                 GetVodFromTwitch(ref tChannel);
 
+                if (tChannel.Path.ToLowerInvariant().Contains("no playable streams") || string.IsNullOrWhiteSpace(tChannel.Path))
+                {
+                    tChannel.Path = $"This channel is not live at this moment. Last checked on {DateTime.Now.ToLongDateString()} {DateTime.Now.ToLongTimeString()}. Will fetch a new link in {REFRESH_MINUTES} {(REFRESH_MINUTES == 1 ? "minute" : "minutes")}.";
+                }
+
                 return Task.FromResult<IEnumerable<MediaSourceInfo>>(new List<MediaSourceInfo>
                 {
                     new MediaSourceInfo()
@@ -314,8 +319,7 @@ namespace MediaBrowser.Channels.Twitch
                         Name = $"{tChannel.UserName}_{tChannel.Path.ToLowerInvariant().Substring(tChannel.Path.Length - 5)}",
                         Id = $"stream_{tChannel.Path.ToLowerInvariant().Substring(tChannel.Path.Length - 5)}",
                         Type = MediaSourceType.Default,
-                        Protocol = MediaProtocol.Http,
-                       
+                        Protocol = MediaProtocol.Http,                       
                     }
                 });
             }
