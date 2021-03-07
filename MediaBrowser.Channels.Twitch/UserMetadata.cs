@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace MediaBrowser.Channels.Twitch
+﻿namespace MediaBrowser.Channels.Twitch
 {
     public class UserMetadata
     {

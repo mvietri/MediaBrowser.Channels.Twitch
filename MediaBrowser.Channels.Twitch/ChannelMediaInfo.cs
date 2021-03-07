@@ -1,55 +1,46 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using MediaBrowser.Common.Extensions;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.MediaInfo;
-using MediaBrowser.Common.Extensions;
+using System;
+using System.Collections.Generic;
 
 namespace MediaBrowser.Channels.Twitch
 {
     public class ChannelMediaInfo
     {
-        public TwitchChannel Channel { get; set; }
-
-        public string Path { get; set; }
-
-        public Dictionary<string, string> RequiredHttpHeaders { get; set; }
-
-        public string Container { get; set; }
-        public string AudioCodec { get; set; }
-        public string VideoCodec { get; set; }
-
-        public int? AudioBitrate { get; set; }
-        public int? VideoBitrate { get; set; }
-        public int? Width { get; set; }
-        public int? Height { get; set; }
-        public int? AudioChannels { get; set; }
-        public int? AudioSampleRate { get; set; }
-
-        public string VideoProfile { get; set; }
-        public float? VideoLevel { get; set; }
-        public float? Framerate { get; set; }
-
-        public bool? IsAnamorphic { get; set; }
-
-        public MediaProtocol Protocol { get; set; }
-
-        public long? RunTimeTicks { get; set; }
-
-        public string Id { get; set; }
-
-        public bool ReadAtNativeFramerate { get; set; }
-        public bool SupportsDirectPlay { get; set; }
-
         public ChannelMediaInfo(string path)
         {
             Path = path;
         }
 
+        public int? AudioBitrate { get; set; }
+        public int? AudioChannels { get; set; }
+        public string AudioCodec { get; set; }
+        public int? AudioSampleRate { get; set; }
+        public TwitchChannel Channel { get; set; }
+
+        public string Container { get; set; }
+        public float? Framerate { get; set; }
+        public int? Height { get; set; }
+        public string Id { get; set; }
+        public bool? IsAnamorphic { get; set; }
+        public string Path { get; set; }
+
+        public MediaProtocol Protocol { get; set; }
+        public bool ReadAtNativeFramerate { get; set; }
+        public Dictionary<string, string> RequiredHttpHeaders { get; set; }
+        public long? RunTimeTicks { get; set; }
+        public bool SupportsDirectPlay { get; set; }
+        public int? VideoBitrate { get; set; }
+        public string VideoCodec { get; set; }
+        public float? VideoLevel { get; set; }
+        public string VideoProfile { get; set; }
+        public int? Width { get; set; }
         public MediaSourceInfo ToMediaSource()
         {
             Path = Channel.Path;
 
-            if (Path.ToLowerInvariant().EndsWith("m3u8") == false)
+            if (!Path.EndsWith("m3u8", StringComparison.InvariantCultureIgnoreCase))
                 Path = ""; // no live stream
 
             var id = Path.GetMD5().ToString("N");
@@ -62,7 +53,7 @@ namespace MediaBrowser.Channels.Twitch
                 RequiredHttpHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 RunTimeTicks = null,
                 Name = id,
-                Id = id, 
+                Id = id,
                 SupportsDirectStream = true,
                 SupportsDirectPlay = SupportsDirectPlay,
                 IsRemote = true,
